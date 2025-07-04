@@ -1,133 +1,166 @@
-<!DOCTYPE html>
-<html lang="="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Webbuy 🛒</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <header>
-    <h1>🛒 Webbuy</h1>
-    <nav>
-      <a href="#login">Login</a>
-      <a href="#admin">Admin Dashboard</a>
-    </nav>
-  </header>
+// Backend URL for Render
+const backendBaseUrl = 'https://webbuy-backend.onrender.com';
 
-  <main id="auth-section">
-    <!-- USER LOGIN -->
-    <section id="user-login">
-      <h2>📱 Login via Phone Number</h2>
-      <input type="tel" id="phone-number" placeholder="+265..." />
-      <div id="recaptcha-container"></div>
-      <button onclick="sendOTP()">Send OTP</button>
-      <input type="text" id="otp-code" placeholder="Enter OTP" style="display:none;" />
-      <button onclick="verifyOTP()" style="display:none;" id="verify-btn">Verify OTP</button>
-    </section>
+let exchangeRate = 3000;
+let currentUser = '';
+let userCart = {};
+let paidUsers = {};
+let allPaidItems = {};
+let userTracking = {};
 
-    <!-- ADMIN LOGIN -->
-    <section id="admin-login">
-      <h2>🔐 Admin Login</h2>
-      <input type="email" id="admin-email" placeholder="Admin Email" />
-      <input type="password" id="admin-password" placeholder="Password" />
-      <button onclick="adminLogin()">Login as Admin</button>
-    </section>
-  </main>
+// Firebase Auth Init
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 
-  <!-- USER ORDER SECTION -->
-  <section id="user-section" style="display:none;">
-    <h2>Paste Your Shein Product Links</h2>
+function sendOTP() {
+  const phone = document.getElementById('phone').value;
+  const appVerifier = window.recaptchaVerifier;
 
-    <label>🔗 Paste Single Product Links (1 per line):</label>
-    <textarea id="links" placeholder="https://www.shein.com/item1...\nhttps://www.shein.com/item2..."></textarea>
+  auth.signInWithPhoneNumber(phone, appVerifier)
+    .then(confirmationResult => {
+      window.confirmationResult = confirmationResult;
+      alert('OTP sent!');
+    }).catch(error => {
+      alert(error.message);
+    });
+}
 
-    <label>🛍 Paste Shared Cart Link:</label>
-    <input type="text" id="shared-cart-link" placeholder="https://api-shein.shein.com/..." />
+function verifyOTP() {
+  const code = document.getElementById('otp').value;
+  confirmationResult.confirm(code)
+    .then(result => {
+      const user = result.user;
+      currentUser = user.phoneNumber;
+      document.getElementById('auth').style.display = 'none';
+      document.getElementById('order-section').style.display = 'block';
+      if (!userCart[currentUser]) userCart[currentUser] = [];
+    }).catch(error => {
+      alert('Invalid OTP');
+    });
+}
 
-    <button onclick="processLinks()">Add to Cart</button>
-    <div id="cart"></div>
+function processLinks() {
+  const linksInput = document.getElementById('links').value.trim();
+  const links = linksInput.split('\n').map(link => link.trim()).filter(Boolean);
 
-    <section id="checkout" style="display:none;">
-      <h3>Total: <span id="total-mwk"></span> MWK</h3>
-      <button onclick="checkout()">Check-out</button>
+  if (links.length === 0) return alert('Paste at least one product link');
 
-      <div id="payment-info" style="display:none;">
-        <h4>Mode of Payment</h4>
-        <pre>
-Standard Bank:
-9100006464472
-(Ridhwan Omar)
+  const cartContainer = document.getElementById('cart');
+  cartContainer.innerHTML = '';
+  userCart[currentUser] = [];
 
-First Capital Bank:
-0001501051812
-(Ridhwan Omar)
+  Promise.all(links.map(link => fetch(${backendBaseUrl}/api/fetch-product?url=${encodeURIComponent(link)})
+    .then(res => res.json())
+    .then(data => {
+      const priceUSD = data.price || (10 + Math.random() * 40).toFixed(2);
+      const priceMWK = priceUSD * exchangeRate;
 
-Airtel Money Agent:
-118724
-(Patricia Osman)
-        </pre>
-        <p><a href="https://wa.me/265996400600" target="_blank">📱 Chat on WhatsApp</a></p>
-        <small>Track your order and send screenshot of payment</small>
-      </div>
-    </section>
-  </section>
+      const item = {
+        link,
+        priceUSD,
+        priceMWK,
+        image: data.image || 'https://via.placeholder.com/60',
+        paid: false
+      };
 
-  <!-- ADMIN PANEL -->
-  <section id="admin" style="display:none;">
-    <h2>🛠 Admin Dashboard</h2>
+      userCart[currentUser].push(item);
 
-    <div>
-      <label for="admin-rate">Update Exchange Rate (USD → MWK):</label>
-      <input type="number" id="admin-rate" placeholder="Enter new rate" />
-      <button onclick="adminUpdateRate()">Update</button>
-    </div>
+      const i = userCart[currentUser].length;
+      const itemDiv = document.createElement('div');
+      itemDiv.className = 'cart-item';
+      itemDiv.innerHTML = `
+        <img src="${item.image}" alt="Product" />
+        <div>
+          <p><strong>Item ${i}</strong></p>
+          <p>$${item.priceUSD} → MWK ${item.priceMWK.toLocaleString()}</p>
+          <a href="${item.link}" target="_blank">View Item</a><br>
+          <label>
+            <input type="checkbox" onchange="markPaid('${currentUser}', ${i - 1}, this)">
+            Mark as Paid
+          </label>
+        </div>
+      `;
+      cartContainer.appendChild(itemDiv);
+    })
+    .catch(err => {
+      alert("Error fetching link: " + link);
+    })
+  )).then(() => {
+    const total = userCart[currentUser].reduce((sum, item) => sum + item.priceMWK, 0);
+    document.getElementById('total-mwk').textContent = total.toLocaleString();
+    document.getElementById('checkout').style.display = 'block';
+  });
+}
 
-    <div id="admin-orders">
-      <h3>Paid Orders by User</h3>
-      <ul id="order-history"></ul>
-    </div>
+function markPaid(user, index, checkbox) {
+  const item = userCart[user][index];
+  item.paid = checkbox.checked;
 
-    <div id="admin-cart">
-      <h3>Combined Cart of All Paid Items</h3>
-      <ul id="all-paid-cart"></ul>
-    </div>
+  if (item.paid) {
+    if (!paidUsers[user]) paidUsers[user] = [];
+    if (!paidUsers[user].includes(item)) paidUsers[user].push(item);
 
-    <div id="tracking-panel">
-      <h3>Update Order Tracking Status</h3>
-      <label for="tracking-user">Select User:</label>
-      <select id="tracking-user"></select>
+    if (!allPaidItems[user]) allPaidItems[user] = [];
+    if (!allPaidItems[user].includes(item)) allPaidItems[user].push(item);
+  } else {
+    paidUsers[user] = paidUsers[user]?.filter(i => i !== item);
+    allPaidItems[user] = allPaidItems[user]?.filter(i => i !== item);
+  }
 
-      <label for="tracking-status">Select Status:</label>
-      <select id="tracking-status">
-        <option value="Processing">Processing</option>
-        <option value="Shipped">Shipped</option>
-        <option value="Arrived">Arrived</option>
-        <option value="Delivered">Delivered</option>
-      </select>
+  updateAdminViews();
+}
 
-      <button onclick="updateTracking()">Update Tracking</button>
-    </div>
-  </section>
+function checkout() {
+  document.getElementById('payment-info').style.display = 'block';
 
-  <!-- FIREBASE SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"></script>
+  const log = document.getElementById('order-history');
+  const li = document.createElement('li');
+  li.innerHTML = `
+    <strong>${currentUser}</strong><br>
+    Items: ${paidUsers[currentUser]?.length || 0}<br>
+    Total Paid: MWK ${(
+      paidUsers[currentUser]?.reduce((sum, i) => sum + i.priceMWK, 0) || 0
+    ).toLocaleString()}
+    <br>Status: ${userTracking[currentUser] || 'Not Updated'}
+  `;
+  log.appendChild(li);
 
-  <!-- FIREBASE CONFIG -->
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyAv5BThaF59mBCw5Q0_t56OYy2VgihCxfY",
-      authDomain: "webbuy-be987.firebaseapp.com",
-      projectId: "webbuy-be987",
-      storageBucket: "webbuy-be987.appspot.com",
-      messagingSenderId: "1060406065263",
-      appId: "1:1060406065263:web:60d8a271234a541284759a"
-    };
-    firebase.initializeApp(firebaseConfig);
-  </script>
+  if (!document.getElementById('tracking-user').querySelector(option[value="${currentUser}"])) {
+    const opt = document.createElement('option');
+    opt.value = currentUser;
+    opt.textContent = currentUser;
+    document.getElementById('tracking-user').appendChild(opt);
+  }
+}
 
-  <!-- APP LOGIC -->
-  <script src="script.js"></script>
-</body>
-</html>
+function updateAdminViews() {
+  const allPaidContainer = document.getElementById('all-paid-cart');
+  allPaidContainer.innerHTML = '';
+
+  Object.keys(allPaidItems).forEach(user => {
+    allPaidItems[user].forEach((item, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <strong>${user}</strong>: MWK ${item.priceMWK.toLocaleString()}<br>
+        <a href="${item.link}" target="_blank">View</a>
+      `;
+      allPaidContainer.appendChild(li);
+    });
+  });
+}
+
+function adminUpdateRate() {
+  const newRate = parseFloat(document.getElementById('admin-rate').value);
+  if (isNaN(newRate) || newRate <= 0) return alert("Enter a valid rate");
+  exchangeRate = newRate;
+  alert("Exchange rate updated to " + exchangeRate);
+}
+
+function updateTracking() {
+  const user = document.getElementById('tracking-user').value;
+  const status = document.getElementById('tracking-status').value;
+
+  if (!user) return alert("Choose a user");
+  userTracking[user] = status;
+  alert(Tracking updated: ${user} is now ${status});
+}
