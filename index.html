@@ -1,59 +1,66 @@
 <!DOCTYPE html>
-<html lang="="en">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Webbuy 🛒</title>
   <link rel="stylesheet" href="style.css" />
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"></script>
+  <script>
+    // Your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyAv5BThaF59mBCw5Q0_t56OYy2VgihCxfY",
+      authDomain: "webbuy-be987.firebaseapp.com",
+      projectId: "webbuy-be987",
+      storageBucket: "webbuy-be987.appspot.com",
+      messagingSenderId: "1060406065263",
+      appId: "1:1060406063:web:60d8a271234a541284759a"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
 </head>
 <body>
   <header>
-    <h1>🛒 Webbuy</h1>
-    <nav>
-      <a href="#login">Login</a>
-      <a href="#admin">Admin Dashboard</a>
-    </nav>
+    <h1>🛒 WEBBUY</h1>
   </header>
 
-  <main id="auth-section">
-    <!-- USER LOGIN -->
-    <section id="user-login">
-      <h2>📱 Login via Phone Number</h2>
-      <input type="tel" id="phone-number" placeholder="+265..." />
+  <!-- AUTHENTICATION -->
+  <section id="auth-section">
+    <!-- USER PHONE LOGIN -->
+    <div id="user-auth">
+      <h2>User Login</h2>
+      <input type="tel" id="phoneNumber" placeholder="+265..." />
       <div id="recaptcha-container"></div>
       <button onclick="sendOTP()">Send OTP</button>
-      <input type="text" id="otp-code" placeholder="Enter OTP" style="display:none;" />
-      <button onclick="verifyOTP()" style="display:none;" id="verify-btn">Verify OTP</button>
-    </section>
-
-    <!-- ADMIN LOGIN -->
-    <section id="admin-login">
-      <h2>🔐 Admin Login</h2>
-      <input type="email" id="admin-email" placeholder="Admin Email" />
-      <input type="password" id="admin-password" placeholder="Password" />
+      <input type="text" id="otp" placeholder="Enter OTP" style="display:none;"/>
+      <button id="verify-btn" onclick="verifyOTP()" style="display:none;">Verify OTP</button>
+    </div>
+    <!-- ADMIN EMAIL LOGIN -->
+    <div id="admin-auth">
+      <h2>Admin Login</h2>
+      <input type="email" id="adminEmail" placeholder="Admin Email" />
+      <input type="password" id="adminPassword" placeholder="Password" />
       <button onclick="adminLogin()">Login as Admin</button>
-    </section>
-  </main>
+    </div>
+  </section>
 
   <!-- USER ORDER SECTION -->
-  <section id="user-section" style="display:none;">
-    <h2>Paste Your Shein Product Links</h2>
-
-    <label>🔗 Paste Single Product Links (1 per line):</label>
-    <textarea id="links" placeholder="https://www.shein.com/item1...\nhttps://www.shein.com/item2..."></textarea>
-
-    <label>🛍 Paste Shared Cart Link:</label>
-    <input type="text" id="shared-cart-link" placeholder="https://api-shein.shein.com/..." />
-
+  <section id="order-section" style="display:none;">
+    <h2>Place Your Order</h2>
+    <label>Single Product Links (one per line):</label>
+    <textarea id="links" placeholder="https://www.shein.com/..."></textarea>
+    <label>Shared Cart Links (one per line):</label>
+    <textarea id="cartLinks" placeholder="https://api-shein.shein.com/..."></textarea>
     <button onclick="processLinks()">Add to Cart</button>
-    <div id="cart"></div>
 
-    <section id="checkout" style="display:none;">
+    <div id="cart"></div>
+    <div id="checkout" style="display:none;">
       <h3>Total: <span id="total-mwk"></span> MWK</h3>
       <button onclick="checkout()">Check-out</button>
-
       <div id="payment-info" style="display:none;">
-        <h4>Mode of Payment</h4>
+        <h4>Payment Methods</h4>
         <pre>
 Standard Bank:
 9100006464472
@@ -67,67 +74,41 @@ Airtel Money Agent:
 118724
 (Patricia Osman)
         </pre>
-        <p><a href="https://wa.me/265996400600" target="_blank">📱 Chat on WhatsApp</a></p>
-        <small>Track your order and send screenshot of payment</small>
+        <p><a href="https://wa.me/265996400600" target="_blank">📱 WhatsApp Chat</a></p>
+        <small>Track your order and send payment screenshot</small>
       </div>
-    </section>
+    </div>
   </section>
 
-  <!-- ADMIN PANEL -->
-  <section id="admin" style="display:none;">
-    <h2>🛠 Admin Dashboard</h2>
-
+  <!-- ADMIN DASHBOARD -->
+  <section id="admin-section" style="display:none;">
+    <h2>Admin Dashboard</h2>
     <div>
-      <label for="admin-rate">Update Exchange Rate (USD → MWK):</label>
-      <input type="number" id="admin-rate" placeholder="Enter new rate" />
-      <button onclick="adminUpdateRate()">Update</button>
+      <label>Exchange Rate (USD→MWK):</label>
+      <input type="number" id="admin-rate" placeholder="3000" />
+      <button onclick="adminUpdateRate()">Update Rate</button>
     </div>
-
     <div id="admin-orders">
-      <h3>Paid Orders by User</h3>
+      <h3>Paid Orders</h3>
       <ul id="order-history"></ul>
     </div>
-
     <div id="admin-cart">
-      <h3>Combined Cart of All Paid Items</h3>
+      <h3>All Paid Items</h3>
       <ul id="all-paid-cart"></ul>
     </div>
-
     <div id="tracking-panel">
-      <h3>Update Order Tracking Status</h3>
-      <label for="tracking-user">Select User:</label>
-      <select id="tracking-user"></select>
-
-      <label for="tracking-status">Select Status:</label>
+      <h3>Update Tracking</h3>
+      <select id="tracking-user"><option value="">Select User</option></select>
       <select id="tracking-status">
         <option value="Processing">Processing</option>
         <option value="Shipped">Shipped</option>
         <option value="Arrived">Arrived</option>
         <option value="Delivered">Delivered</option>
       </select>
-
-      <button onclick="updateTracking()">Update Tracking</button>
+      <button onclick="updateTracking()">Update</button>
     </div>
   </section>
 
-  <!-- FIREBASE SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"></script>
-
-  <!-- FIREBASE CONFIG -->
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyAv5BThaF59mBCw5Q0_t56OYy2VgihCxfY",
-      authDomain: "webbuy-be987.firebaseapp.com",
-      projectId: "webbuy-be987",
-      storageBucket: "webbuy-be987.appspot.com",
-      messagingSenderId: "1060406065263",
-      appId: "1:1060406065263:web:60d8a271234a541284759a"
-    };
-    firebase.initializeApp(firebaseConfig);
-  </script>
-
-  <!-- APP LOGIC -->
   <script src="script.js"></script>
 </body>
 </html>
