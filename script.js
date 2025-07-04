@@ -1,166 +1,150 @@
-// Backend URL for Render
+// Backend URL
 const backendBaseUrl = 'https://webbuy-backend.onrender.com';
 
 let exchangeRate = 3000;
 let currentUser = '';
-let userCart = {};
-let paidUsers = {};
-let allPaidItems = {};
-let userTracking = {};
+let userCart = {}, paidUsers = {}, allPaidItems = {}, userTracking = {};
 
-// Firebase Auth Init
-firebase.initializeApp(firebaseConfig);
+// Firebase Auth
 const auth = firebase.auth();
 
+// Recaptcha
+window.onload = () => {
+  window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { size:'invisible' });
+};
+
+// User OTP functions
 function sendOTP() {
-  const phone = document.getElementById('phone').value;
-  const appVerifier = window.recaptchaVerifier;
-
-  auth.signInWithPhoneNumber(phone, appVerifier)
-    .then(confirmationResult => {
-      window.confirmationResult = confirmationResult;
-      alert('OTP sent!');
-    }).catch(error => {
-      alert(error.message);
-    });
+  const phone = document.getElementById('phoneNumber').value.trim();
+  if (!phone.startsWith('+')) return alert('Include country code');
+  auth.signInWithPhoneNumber(phone, window.recaptchaVerifier)
+    .then(res => {
+      window.confirmationResult = res;
+      document.getElementById('otp').style.display='block';
+      document.getElementById('verify-btn').style.display='block';
+      alert('OTP sent');
+    }).catch(e=>alert(e.message));
 }
-
 function verifyOTP() {
-  const code = document.getElementById('otp').value;
-  confirmationResult.confirm(code)
+  const code = document.getElementById('otp').value.trim();
+  window.confirmationResult.confirm(code)
     .then(result => {
-      const user = result.user;
-      currentUser = user.phoneNumber;
-      document.getElementById('auth').style.display = 'none';
-      document.getElementById('order-section').style.display = 'block';
-      if (!userCart[currentUser]) userCart[currentUser] = [];
-    }).catch(error => {
-      alert('Invalid OTP');
-    });
+      currentUser = result.user.phoneNumber;
+      document.getElementById('auth-section').style.display='none';
+      document.getElementById('order-section').style.display='block';
+      if (!userCart[currentUser]) userCart[currentUser]=[];
+    }).catch(e=>alert('Invalid OTP'));
 }
 
+// Admin email login
+function adminLogin() {
+  const email = document.getElementById('adminEmail').value;
+  const pass = document.getElementById('adminPassword').value;
+  auth.signInWithEmailAndPassword(email, pass)
+    .then(() => {
+      document.getElementById('auth-section').style.display='none';
+      document.getElementById('admin-section').style.display='block';
+    }).catch(e=>alert('Admin login failed'));
+}
+
+// Process both link types
 function processLinks() {
-  const linksInput = document.getElementById('links').value.trim();
-  const links = linksInput.split('\n').map(link => link.trim()).filter(Boolean);
-
-  if (links.length === 0) return alert('Paste at least one product link');
-
-  const cartContainer = document.getElementById('cart');
-  cartContainer.innerHTML = '';
-  userCart[currentUser] = [];
-
-  Promise.all(links.map(link => fetch(${backendBaseUrl}/api/fetch-product?url=${encodeURIComponent(link)})
-    .then(res => res.json())
-    .then(data => {
-      const priceUSD = data.price || (10 + Math.random() * 40).toFixed(2);
-      const priceMWK = priceUSD * exchangeRate;
-
-      const item = {
-        link,
-        priceUSD,
-        priceMWK,
-        image: data.image || 'https://via.placeholder.com/60',
-        paid: false
-      };
-
-      userCart[currentUser].push(item);
-
-      const i = userCart[currentUser].length;
-      const itemDiv = document.createElement('div');
-      itemDiv.className = 'cart-item';
-      itemDiv.innerHTML = `
-        <img src="${item.image}" alt="Product" />
-        <div>
-          <p><strong>Item ${i}</strong></p>
-          <p>$${item.priceUSD} → MWK ${item.priceMWK.toLocaleString()}</p>
-          <a href="${item.link}" target="_blank">View Item</a><br>
-          <label>
-            <input type="checkbox" onchange="markPaid('${currentUser}', ${i - 1}, this)">
-            Mark as Paid
-          </label>
-        </div>
-      `;
-      cartContainer.appendChild(itemDiv);
-    })
-    .catch(err => {
-      alert("Error fetching link: " + link);
-    })
-  )).then(() => {
-    const total = userCart[currentUser].reduce((sum, item) => sum + item.priceMWK, 0);
-    document.getElementById('total-mwk').textContent = total.toLocaleString();
-    document.getElementById('checkout').style.display = 'block';
+  if (!currentUser) return alert('Please login first');
+  const single = document.getElementById('links').value.trim().split('\n').filter(l=>l);
+  const carts  = document.getElementById('cartLinks').value.trim().split('\n').filter(l=>l);
+  const container = document.getElementById('cart');
+  container.innerHTML=''; userCart[currentUser]=[];
+  // handle single links
+  single.forEach((link,i)=> fetchItem(link,i));
+  // handle cart links
+  carts.forEach(link=> {
+    fetch(${backendBaseUrl}/api/fetch-cart?url=${encodeURIComponent(link)})
+      .then(r=>r.json()).then(data=>{
+        data.items.forEach((it,i)=> fetchItem(it.link, i, it.image, it.price));
+      }).catch(()=>alert('Cart fetch failed'));
   });
 }
+// Fetch single item or passed item
+function fetchItem(link, idx, imgOverride, priceOverride) {
+  fetch(${backendBaseUrl}/api/fetch-product?url=${encodeURIComponent(link)})
+    .then(r=>r.json()).then(data=>{
+      const usd = priceOverride||data.priceUSD||0;
+      const mwk = usd*exchangeRate;
+      const img = imgOverride||data.image;
+      const item={link,priceUSD:usd,priceMWK:mwk,image:img,paid:false};
+      userCart[currentUser].push(item);
+      renderItem(item,userCart[currentUser].length-1);
+      updateTotal();
+    }).catch(()=>alert('Product fetch failed'));
+}
+function renderItem(item,i) {
+  const div=document.createElement('div'); div.className='cart-item';
+  div.innerHTML=`
+    <img src="${item.image}" />
+    <div>
+      <p><strong>Item ${i+1}</strong></p>
+      <p>$${item.priceUSD}→MWK ${item.priceMWK.toLocaleString()}</p>
+      <a href="${item.link}" target="_blank">View</a><br>
+      <label><input type="checkbox" onchange="markPaid('${currentUser}',${i},this)">Paid</label>
+    </div>`;
+  document.getElementById('cart').appendChild(div);
+}
+function updateTotal(){
+  const t=userCart[currentUser].reduce((s,i)=>s+i.priceMWK,0);
+  document.getElementById('total-mwk').textContent=t.toLocaleString();
+  document.getElementById('checkout').style.display='block';
+}
 
-function markPaid(user, index, checkbox) {
-  const item = userCart[user][index];
-  item.paid = checkbox.checked;
-
-  if (item.paid) {
-    if (!paidUsers[user]) paidUsers[user] = [];
-    if (!paidUsers[user].includes(item)) paidUsers[user].push(item);
-
-    if (!allPaidItems[user]) allPaidItems[user] = [];
-    if (!allPaidItems[user].includes(item)) allPaidItems[user].push(item);
+// Mark as paid
+function markPaid(user,i,cb){
+  const item=userCart[user][i]; item.paid=cb.checked;
+  if(cb.checked) {
+    (paidUsers[user]||(paidUsers[user]=[])).push(item);
+    (allPaidItems[user]||(allPaidItems[user]=[])).push(item);
   } else {
-    paidUsers[user] = paidUsers[user]?.filter(i => i !== item);
-    allPaidItems[user] = allPaidItems[user]?.filter(i => i !== item);
+    paidUsers[user]=paidUsers[user].filter(x=>x!==item);
+    allPaidItems[user]=allPaidItems[user].filter(x=>x!==item);
   }
-
   updateAdminViews();
 }
 
-function checkout() {
-  document.getElementById('payment-info').style.display = 'block';
-
-  const log = document.getElementById('order-history');
-  const li = document.createElement('li');
-  li.innerHTML = `
-    <strong>${currentUser}</strong><br>
-    Items: ${paidUsers[currentUser]?.length || 0}<br>
-    Total Paid: MWK ${(
-      paidUsers[currentUser]?.reduce((sum, i) => sum + i.priceMWK, 0) || 0
-    ).toLocaleString()}
-    <br>Status: ${userTracking[currentUser] || 'Not Updated'}
-  `;
-  log.appendChild(li);
-
-  if (!document.getElementById('tracking-user').querySelector(option[value="${currentUser}"])) {
-    const opt = document.createElement('option');
-    opt.value = currentUser;
-    opt.textContent = currentUser;
-    document.getElementById('tracking-user').appendChild(opt);
+// Checkout
+function checkout(){
+  document.getElementById('payment-info').style.display='block';
+  const li=document.createElement('li');
+  const paid=paidUsers[currentUser]||[];
+  li.innerHTML=`<strong>${currentUser}</strong><br>
+    Items: ${paid.length}<br>
+    Total Paid: MWK ${paid.reduce((s,i)=>s+i.priceMWK,0).toLocaleString()}<br>
+    Status: ${userTracking[currentUser]||'Not Updated'}`;
+  document.getElementById('order-history').appendChild(li);
+  if(![...document.getElementById('tracking-user').options].some(o=>o.value===currentUser)){
+    const opt=new Option(currentUser,currentUser);
+    document.getElementById('tracking-user').add(opt);
   }
 }
 
-function updateAdminViews() {
-  const allPaidContainer = document.getElementById('all-paid-cart');
-  allPaidContainer.innerHTML = '';
-
-  Object.keys(allPaidItems).forEach(user => {
-    allPaidItems[user].forEach((item, i) => {
-      const li = document.createElement('li');
-      li.innerHTML = `
-        <strong>${user}</strong>: MWK ${item.priceMWK.toLocaleString()}<br>
-        <a href="${item.link}" target="_blank">View</a>
-      `;
-      allPaidContainer.appendChild(li);
-    });
+// Admin views
+function updateAdminViews(){
+  const ul=document.getElementById('all-paid-cart'); ul.innerHTML='';
+  for(const u in allPaidItems) allPaidItems[u].forEach(it=>{
+    const li=document.createElement('li');
+    li.innerHTML=<strong>${u}</strong>: MWK ${it.priceMWK.toLocaleString()}<br><a href="${it.link}" target="_blank">View</a>;
+    ul.appendChild(li);
   });
 }
 
-function adminUpdateRate() {
-  const newRate = parseFloat(document.getElementById('admin-rate').value);
-  if (isNaN(newRate) || newRate <= 0) return alert("Enter a valid rate");
-  exchangeRate = newRate;
-  alert("Exchange rate updated to " + exchangeRate);
+// Admin rate update
+function adminUpdateRate(){
+  const r=+document.getElementById('admin-rate').value;
+  if(!r) return alert('Enter valid rate');
+  exchangeRate=r; alert('Rate updated');
 }
 
-function updateTracking() {
-  const user = document.getElementById('tracking-user').value;
-  const status = document.getElementById('tracking-status').value;
-
-  if (!user) return alert("Choose a user");
-  userTracking[user] = status;
-  alert(Tracking updated: ${user} is now ${status});
+// Tracking
+function updateTracking(){
+  const u=document.getElementById('tracking-user').value;
+  const s=document.getElementById('tracking-status').value;
+  if(!u) return alert('Select user');
+  userTracking[u]=s; alert(${u} is now ${s});
 }
