@@ -1,150 +1,176 @@
-// Backend URL
-const backendBaseUrl = 'https://webbuy-backend.onrender.com';
-
-let exchangeRate = 3000;
-let currentUser = '';
-let userCart = {}, paidUsers = {}, allPaidItems = {}, userTracking = {};
-
-// Firebase Auth
-const auth = firebase.auth();
-
-// Recaptcha
-window.onload = () => {
-  window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { size:'invisible' });
+// Firebase configuration (replace with your own if needed)
+const firebaseConfig = {
+  apiKey: "AIzaSyAv5BThaF59mBCw5Q0_t56OYy2VgihCxfY",
+  authDomain: "webbuy-be987.firebaseapp.com",
+  projectId: "webbuy-be987",
+  storageBucket: "webbuy-be987.appspot.com",
+  messagingSenderId: "1060406065263",
+  appId: "1:1060406065263:web:60d8a271234a541284759a"
 };
 
-// User OTP functions
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
+let exchangeRate = 3000;
+let currentUser = null;
+let isAdmin = false;
+let userCart = {};
+let paidUsers = {};
+let allPaidItems = {};
+let userTracking = {};
+
+// ADMIN email list
+const adminEmails = ["admin@webbuy.com"];
+
+function show(sectionId) {
+  document.querySelectorAll("section").forEach(s => s.style.display = "none");
+  document.getElementById(sectionId).style.display = "block";
+}
+
+// OTP LOGIN
 function sendOTP() {
-  const phone = document.getElementById('phoneNumber').value.trim();
-  if (!phone.startsWith('+')) return alert('Include country code');
-  auth.signInWithPhoneNumber(phone, window.recaptchaVerifier)
-    .then(res => {
-      window.confirmationResult = res;
-      document.getElementById('otp').style.display='block';
-      document.getElementById('verify-btn').style.display='block';
-      alert('OTP sent');
-    }).catch(e=>alert(e.message));
-}
-function verifyOTP() {
-  const code = document.getElementById('otp').value.trim();
-  window.confirmationResult.confirm(code)
-    .then(result => {
-      currentUser = result.user.phoneNumber;
-      document.getElementById('auth-section').style.display='none';
-      document.getElementById('order-section').style.display='block';
-      if (!userCart[currentUser]) userCart[currentUser]=[];
-    }).catch(e=>alert('Invalid OTP'));
-}
-
-// Admin email login
-function adminLogin() {
-  const email = document.getElementById('adminEmail').value;
-  const pass = document.getElementById('adminPassword').value;
-  auth.signInWithEmailAndPassword(email, pass)
-    .then(() => {
-      document.getElementById('auth-section').style.display='none';
-      document.getElementById('admin-section').style.display='block';
-    }).catch(e=>alert('Admin login failed'));
-}
-
-// Process both link types
-function processLinks() {
-  if (!currentUser) return alert('Please login first');
-  const single = document.getElementById('links').value.trim().split('\n').filter(l=>l);
-  const carts  = document.getElementById('cartLinks').value.trim().split('\n').filter(l=>l);
-  const container = document.getElementById('cart');
-  container.innerHTML=''; userCart[currentUser]=[];
-  // handle single links
-  single.forEach((link,i)=> fetchItem(link,i));
-  // handle cart links
-  carts.forEach(link=> {
-    fetch(${backendBaseUrl}/api/fetch-cart?url=${encodeURIComponent(link)})
-      .then(r=>r.json()).then(data=>{
-        data.items.forEach((it,i)=> fetchItem(it.link, i, it.image, it.price));
-      }).catch(()=>alert('Cart fetch failed'));
+  const phone = document.getElementById("phone").value;
+  window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier("recaptcha", {
+    size: "invisible"
   });
-}
-// Fetch single item or passed item
-function fetchItem(link, idx, imgOverride, priceOverride) {
-  fetch(${backendBaseUrl}/api/fetch-product?url=${encodeURIComponent(link)})
-    .then(r=>r.json()).then(data=>{
-      const usd = priceOverride||data.priceUSD||0;
-      const mwk = usd*exchangeRate;
-      const img = imgOverride||data.image;
-      const item={link,priceUSD:usd,priceMWK:mwk,image:img,paid:false};
-      userCart[currentUser].push(item);
-      renderItem(item,userCart[currentUser].length-1);
-      updateTotal();
-    }).catch(()=>alert('Product fetch failed'));
-}
-function renderItem(item,i) {
-  const div=document.createElement('div'); div.className='cart-item';
-  div.innerHTML=`
-    <img src="${item.image}" />
-    <div>
-      <p><strong>Item ${i+1}</strong></p>
-      <p>$${item.priceUSD}→MWK ${item.priceMWK.toLocaleString()}</p>
-      <a href="${item.link}" target="_blank">View</a><br>
-      <label><input type="checkbox" onchange="markPaid('${currentUser}',${i},this)">Paid</label>
-    </div>`;
-  document.getElementById('cart').appendChild(div);
-}
-function updateTotal(){
-  const t=userCart[currentUser].reduce((s,i)=>s+i.priceMWK,0);
-  document.getElementById('total-mwk').textContent=t.toLocaleString();
-  document.getElementById('checkout').style.display='block';
+
+  auth.signInWithPhoneNumber(phone, window.recaptchaVerifier)
+    .then(confirmResult => {
+      window.confirmationResult = confirmResult;
+      alert("OTP sent");
+      document.getElementById("otp-section").style.display = "block";
+    }).catch(error => alert(error.message));
 }
 
-// Mark as paid
-function markPaid(user,i,cb){
-  const item=userCart[user][i]; item.paid=cb.checked;
-  if(cb.checked) {
-    (paidUsers[user]||(paidUsers[user]=[])).push(item);
-    (allPaidItems[user]||(allPaidItems[user]=[])).push(item);
-  } else {
-    paidUsers[user]=paidUsers[user].filter(x=>x!==item);
-    allPaidItems[user]=allPaidItems[user].filter(x=>x!==item);
+function verifyOTP() {
+  const code = document.getElementById("otp-code").value;
+  confirmationResult.confirm(code).then(result => {
+    const user = result.user;
+    currentUser = user.phoneNumber;
+    isAdmin = adminEmails.includes(user.email || "");
+
+    document.getElementById("login-section").style.display = "none";
+    if (!userCart[currentUser]) userCart[currentUser] = [];
+
+    show("order-section");
+  }).catch(err => alert("Incorrect code"));
+}
+
+// ============ USER SECTION ==============
+
+async function processLinks() {
+  const linksText = document.getElementById("links").value.trim();
+  const links = linksText.split("\n").map(l => l.trim()).filter(Boolean);
+  if (!links.length) return alert("Paste at least one product link");
+
+  const cartContainer = document.getElementById("cart");
+  cartContainer.innerHTML = "";
+  userCart[currentUser] = [];
+
+  for (const link of links) {
+    const res = await fetch(https://webbuy-backend.onrender.com/api/fetch?url=${encodeURIComponent(link)});
+    const data = await res.json();
+    const item = {
+      link,
+      image: data.image || "https://via.placeholder.com/70",
+      priceUSD: data.price || 15,
+      priceMWK: (data.price || 15) * exchangeRate,
+      paid: false
+    };
+    userCart[currentUser].push(item);
+
+    const div = document.createElement("div");
+    div.className = "cart-item";
+    div.innerHTML = `
+      <img src="${item.image}" />
+      <div>
+        <p><strong>${item.link.includes("appjump") ? "Cart Link" : "Item"}</strong></p>
+        <p>$${item.priceUSD} → MWK ${item.priceMWK.toLocaleString()}</p>
+        <a href="${link}" target="_blank">View</a><br>
+        <label>
+          <input type="checkbox" onchange="markPaid('${currentUser}', ${userCart[currentUser].length - 1}, this)">
+          Mark as Paid
+        </label>
+      </div>
+    `;
+    cartContainer.appendChild(div);
   }
+
+  const total = userCart[currentUser].reduce((sum, item) => sum + item.priceMWK, 0);
+  document.getElementById("total-mwk").textContent = total.toLocaleString();
+  document.getElementById("checkout").style.display = "block";
+}
+
+function markPaid(user, index, checkbox) {
+  const item = userCart[user][index];
+  item.paid = checkbox.checked;
+
+  if (item.paid) {
+    if (!paidUsers[user]) paidUsers[user] = [];
+    if (!paidUsers[user].includes(item)) paidUsers[user].push(item);
+
+    if (!allPaidItems[user]) allPaidItems[user] = [];
+    if (!allPaidItems[user].includes(item)) allPaidItems[user].push(item);
+  } else {
+    paidUsers[user] = paidUsers[user]?.filter(i => i !== item);
+    allPaidItems[user] = allPaidItems[user]?.filter(i => i !== item);
+  }
+
   updateAdminViews();
 }
 
-// Checkout
-function checkout(){
-  document.getElementById('payment-info').style.display='block';
-  const li=document.createElement('li');
-  const paid=paidUsers[currentUser]||[];
-  li.innerHTML=`<strong>${currentUser}</strong><br>
-    Items: ${paid.length}<br>
-    Total Paid: MWK ${paid.reduce((s,i)=>s+i.priceMWK,0).toLocaleString()}<br>
-    Status: ${userTracking[currentUser]||'Not Updated'}`;
-  document.getElementById('order-history').appendChild(li);
-  if(![...document.getElementById('tracking-user').options].some(o=>o.value===currentUser)){
-    const opt=new Option(currentUser,currentUser);
-    document.getElementById('tracking-user').add(opt);
+function checkout() {
+  document.getElementById("payment-info").style.display = "block";
+  const log = document.getElementById("order-history");
+  const li = document.createElement("li");
+  li.innerHTML = `
+    <strong>${currentUser}</strong><br>
+    Items: ${paidUsers[currentUser]?.length || 0}<br>
+    Total Paid: MWK ${
+      (paidUsers[currentUser]?.reduce((sum, i) => sum + i.priceMWK, 0) || 0).toLocaleString()
+    }<br>Status: ${userTracking[currentUser] || 'Not Updated'}
+  `;
+  log.appendChild(li);
+
+  if (!document.querySelector(#tracking-user option[value="${currentUser}"])) {
+    const opt = document.createElement("option");
+    opt.value = currentUser;
+    opt.textContent = currentUser;
+    document.getElementById("tracking-user").appendChild(opt);
   }
 }
 
-// Admin views
-function updateAdminViews(){
-  const ul=document.getElementById('all-paid-cart'); ul.innerHTML='';
-  for(const u in allPaidItems) allPaidItems[u].forEach(it=>{
-    const li=document.createElement('li');
-    li.innerHTML=<strong>${u}</strong>: MWK ${it.priceMWK.toLocaleString()}<br><a href="${it.link}" target="_blank">View</a>;
-    ul.appendChild(li);
+// ============ ADMIN SECTION ==============
+
+function adminUpdateRate() {
+  if (!isAdmin) return alert("Only admin can change the rate");
+  const newRate = parseFloat(document.getElementById("admin-rate").value);
+  if (isNaN(newRate) || newRate <= 0) return alert("Enter a valid rate");
+  exchangeRate = newRate;
+  alert(Exchange rate updated to ${exchangeRate});
+}
+
+function updateAdminViews() {
+  const allPaidContainer = document.getElementById("all-paid-cart");
+  allPaidContainer.innerHTML = "";
+
+  Object.keys(allPaidItems).forEach(user => {
+    allPaidItems[user].forEach(item => {
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <strong>${user}</strong>: MWK ${item.priceMWK.toLocaleString()}<br>
+        <a href="${item.link}" target="_blank">View</a>
+      `;
+      allPaidContainer.appendChild(li);
+    });
   });
 }
 
-// Admin rate update
-function adminUpdateRate(){
-  const r=+document.getElementById('admin-rate').value;
-  if(!r) return alert('Enter valid rate');
-  exchangeRate=r; alert('Rate updated');
-}
+function updateTracking() {
+  const user = document.getElementById("tracking-user").value;
+  const status = document.getElementById("tracking-status").value;
+  if (!user) return alert("Choose a user");
 
-// Tracking
-function updateTracking(){
-  const u=document.getElementById('tracking-user').value;
-  const s=document.getElementById('tracking-status').value;
-  if(!u) return alert('Select user');
-  userTracking[u]=s; alert(${u} is now ${s});
+  userTracking[user] = status;
+  alert(${user}'s tracking updated to ${status});
 }
