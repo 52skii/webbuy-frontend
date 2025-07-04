@@ -1,19 +1,38 @@
-* { box-sizing: border-box; margin:0; padding:0; }
-body { font-family: Arial, sans-serif; background:#f9f9f9; color:#333; }
-header { background:#000; color:#fff; padding:1rem; text-align:center; }
-h1 { margin:0; }
-section { max-width:700px; margin:2rem auto; background:#fff; padding:1.5rem; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,0.1); }
-input, textarea, select { width:100%; padding:0.75rem; margin-top:1rem; border:1px solid #ccc; border-radius:6px; }
-button { background:#f23005; color:#fff; border:none; padding:0.75rem 1.5rem; border-radius:6px; cursor:pointer; margin-top:1rem; }
-button:hover { background:#c02100; }
-#cart { margin-top:1rem; }
-.cart-item { display:flex; align-items:center; border-bottom:1px solid #eee; padding:1rem 0; }
-.cart-item img { width:70px; height:70px; object-fit:cover; border-radius:6px; margin-right:1rem; }
-#checkout { margin-top:1rem; }
-#payment-info pre { background:#f1f1f1; padding:1rem; border-radius:6px; white-space:pre-wrap; }
-#admin-orders ul, #admin-cart ul { list-style:none; padding:0; }
-#admin-orders li, #admin-cart li { background:#f4f4f4; padding:1rem; margin-bottom:1rem; border-left:5px solid #f23005; }
-@media(max-width:600px) {
-  .cart-item { flex-direction:column; align-items:flex-start; }
-  button { width:100%; }
-}
+// ✅ FULL UPDATED style.css /* General Reset */
+
+{ box-sizing: border-box; margin: 0; padding: 0; }
+
+
+body { font-family: 'Segoe UI', sans-serif; background-color: #f9f9f9; color: #333; padding-bottom: 5rem; }
+
+header { background-color: #000; color: white; padding: 1rem; text-align: center; }
+
+header h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+
+nav a { color: #fff; margin: 0 1rem; text-decoration: none; font-weight: bold; }
+
+main, section { max-width: 700px; margin: 2rem auto; background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
+
+input[type="text"], input[type="number"], input[type="email"], input[type="password"], textarea, select { width: 100%; padding: 0.75rem; margin-top: 1rem; margin-bottom: 1.5rem; border: 1px solid #ccc; border-radius: 8px; font-size: 1rem; }
+
+textarea { resize: vertical; height: 100px; }
+
+button { background-color: #f23005; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 0.5rem; transition: background-color 0.3s ease; }
+
+button:hover { background-color: #c02100; }
+
+.cart-item { display: flex; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #eee; }
+
+.cart-item img { width: 70px; height: 70px; object-fit: cover; border-radius: 8px; margin-right: 1rem; }
+
+.cart-item div { flex: 1; }
+
+.cart-item label { display: block; margin-top: 0.5rem; font-size: 0.9rem; color: #555; }
+
+pre { background: #f3f3f3; padding: 1rem; border-radius: 8px; font-size: 0.9rem; white-space: pre-wrap; }
+
+@media (max-width: 600px) { .cart-item { flex-direction: column; align-items: flex-start; }
+
+.cart-item img { margin-bottom: 0.5rem; }
+
+button { width: 100%; } }
