@@ -1,60 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Webbuy 🛒</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Webbuy</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- Firebase Auth SDK -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyAv5BThaF59mBCw5Q0_t56OYy2VgihCxfY",
-      authDomain: "webbuy-be987.firebaseapp.com",
-      projectId: "webbuy-be987",
-      storageBucket: "webbuy-be987.appspot.com",
-      messagingSenderId: "1060406065263",
-      appId: "1:1060406065263:web:60d8a271234a541284759a"
-    };
-    firebase.initializeApp(firebaseConfig);
-  </script>
+  <script type="module" src="firebase-config.js"></script>
 </head>
+
 <body>
   <header>
-    <h1>🛒 Webbuy</h1>
-    <nav>
-      <a href="#user">User Login</a>
-      <a href="#admin">Admin Login</a>
-    </nav>
+    <div class="logo">
+      <img src="cart-icon.png" alt="Cart Logo">
+      <h1>Webbuy</h1>
+    </div>
+    <div id="exchange-rate">Rate as of today: <span id="rate-display"></span> MWK</div>
   </header>
 
-  <main>
-    <!-- User Login -->
-    <section id="user-login">
-      <h2>Login with Phone</h2>
-      <input type="text" id="phoneNumber" placeholder="+265..." />
-      <div id="recaptcha-container"></div>
-      <button onclick="sendOTP()">Send OTP</button>
+  <main id="auth-section">
+    <div id="signup-form">
+      <h2>Sign Up</h2>
+      <input type="email" id="signup-email" placeholder="Email">
+      <input type="password" id="signup-password" placeholder="Password">
+      <button id="signup-btn">Sign Up</button>
+      <p>Already have an account? <span id="show-login">Login here</span></p>
+    </div>
 
-      <input type="text" id="otp" placeholder="Enter OTP" style="display:none" />
-      <button onclick="verifyOTP()" style="display:none" id="verifyBtn">Verify</button>
+    <div id="login-form" style="display:none;">
+      <h2>Login</h2>
+      <input type="email" id="login-email" placeholder="Email">
+      <input type="password" id="login-password" placeholder="Password">
+      <button id="user-login-btn">Login as User</button>
+      <button id="admin-login-btn">Login as Admin</button>
+      <p>Don't have an account? <span id="show-signup">Sign up here</span></p>
+    </div>
+  </main>
+
+  <main id="user-dashboard" style="display:none;">
+    <section>
+      <h2>Shein Links for Single Items</h2>
+      <textarea id="single-links" placeholder="Paste each link on a new line"></textarea>
+      <button id="process-links-btn">Done</button>
+      <div id="cart-display"></div>
     </section>
 
-    <!-- Cart Section -->
-    <section id="cart-section" style="display:none;">
-      <h2>Paste Shein Product or Cart Links</h2>
-      <textarea id="productLinks" placeholder="Paste single item links (each on a new line)"></textarea>
-      <textarea id="cartLinks" placeholder="Paste shared Shein cart links (1 per line)"></textarea>
-      <button onclick="addLinksToCart()">Add to Cart</button>
-      <div id="cart"></div>
-      <div id="checkout" style="display:none;">
-        <h3>Total: <span id="total-mwk">0</span> MWK</h3>
-        <button onclick="checkout()">Checkout</button>
-      </div>
-      <div id="payment" style="display:none;">
-        <h4>Payment Instructions</h4>
-        <pre>
+    <section>
+      <h2>Shopping List (Shein Cart) Link</h2>
+      <textarea id="cart-link" placeholder="Paste Shein cart link here"></textarea>
+    </section>
+
+    <div id="checkout-section" style="display:none;">
+      <h3>Total: MWK <span id="total-amount"></span></h3>
+      <button id="checkout-btn">Checkout</button>
+    </div>
+
+    <div id="payment-section" style="display:none;">
+      <h4>Mode of Payment</h4>
+      <pre>
 Standard Bank:
 9100006464472
 (Ridhwan Omar)
@@ -66,42 +69,32 @@ First Capital Bank:
 Airtel Money Agent:
 118724
 (Patricia Osman)
-        </pre>
-        <p><a href="https://wa.me/265996400600" target="_blank">📱 Chat on WhatsApp</a></p>
-      </div>
+      </pre>
+      <h3>Make payment then send screenshot</h3>
+      <a href="https://wa.me/265996400600" target="_blank"><button>Send Screenshot</button></a>
+    </div>
+
+    <section>
+      <h3>Order History</h3>
+      <div id="order-history"></div>
     </section>
 
-    <!-- Admin Login -->
-    <section id="admin-login">
-      <h2>Admin Login</h2>
-      <input type="email" id="adminEmail" placeholder="Admin Email">
-      <input type="password" id="adminPass" placeholder="Password">
-      <button onclick="adminLogin()">Login</button>
-    </section>
-
-    <!-- Admin Dashboard -->
-    <section id="admin-dashboard" style="display:none;">
-      <h2>🛠 Admin Dashboard</h2>
-      <div>
-        <label>Exchange Rate:</label>
-        <input type="number" id="exchangeRate" />
-        <button onclick="updateRate()">Update</button>
-      </div>
-      <h3>Paid Orders</h3>
-      <ul id="paid-orders"></ul>
-
-      <h3>Tracking Status</h3>
-      <select id="tracking-user"></select>
-      <select id="tracking-status">
-        <option value="Processing">Processing</option>
-        <option value="Shipped">Shipped</option>
-        <option value="Arrived">Arrived</option>
-        <option value="Delivered">Delivered</option>
-      </select>
-      <button onclick="updateTracking()">Update</button>
-    </section>
+    <button id="logout-btn">Logout</button>
   </main>
 
-  <script src="script.js"></script>
+  <main id="admin-dashboard" style="display:none;">
+    <h2>Admin Dashboard</h2>
+    <div>
+      <label>Update Exchange Rate:</label>
+      <input type="number" id="new-rate" placeholder="New Rate">
+      <button id="update-rate-btn">Update</button>
+    </div>
+    <h3>Orders</h3>
+    <div id="admin-orders"></div>
+    <button id="admin-logout-btn">Logout</button>
+  </main>
+
+  <script src="script.js" type="module"></script>
 </body>
+
 </html>
