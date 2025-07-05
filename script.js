@@ -1,176 +1,179 @@
-// Firebase configuration (replace with your own if needed)
-const firebaseConfig = {
-  apiKey: "AIzaSyAv5BThaF59mBCw5Q0_t56OYy2VgihCxfY",
-  authDomain: "webbuy-be987.firebaseapp.com",
-  projectId: "webbuy-be987",
-  storageBucket: "webbuy-be987.appspot.com",
-  messagingSenderId: "1060406065263",
-  appId: "1:1060406065263:web:60d8a271234a541284759a"
-};
+import { initializeApp } from "firebase/app";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { firebaseConfig } from './firebase-config.js';
 
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
+const app = initializeApp(firebaseConfig);
+const auth = getAuth();
 
-let exchangeRate = 3000;
-let currentUser = null;
-let isAdmin = false;
-let userCart = {};
-let paidUsers = {};
-let allPaidItems = {};
-let userTracking = {};
+const backendURL = 'https://webbuy-backend-1.onrender.com';
+const adminKey = '1738';
 
-// ADMIN email list
-const adminEmails = ["admin@webbuy.com"];
+document.getElementById('signup-btn').addEventListener('click', () => {
+  const email = document.getElementById('signup-email').value;
+  const password = document.getElementById('signup-password').value;
 
-function show(sectionId) {
-  document.querySelectorAll("section").forEach(s => s.style.display = "none");
-  document.getElementById(sectionId).style.display = "block";
-}
+  createUserWithEmailAndPassword(auth, email, password)
+    .then(userCredential => {
+      alert('Sign up successful!');
+      document.getElementById('auth-section').style.display = 'none';
+      document.getElementById('user-dashboard').style.display = 'block';
+      fetchOrders();
+    })
+    .catch(error => alert(error.message));
+});
 
-// OTP LOGIN
-function sendOTP() {
-  const phone = document.getElementById("phone").value;
-  window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier("recaptcha", {
-    size: "invisible"
-  });
+document.getElementById('user-login-btn').addEventListener('click', () => {
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
 
-  auth.signInWithPhoneNumber(phone, window.recaptchaVerifier)
-    .then(confirmResult => {
-      window.confirmationResult = confirmResult;
-      alert("OTP sent");
-      document.getElementById("otp-section").style.display = "block";
-    }).catch(error => alert(error.message));
-}
+  signInWithEmailAndPassword(auth, email, password)
+    .then(userCredential => {
+      document.getElementById('auth-section').style.display = 'none';
+      document.getElementById('user-dashboard').style.display = 'block';
+      fetchOrders();
+    })
+    .catch(error => alert(error.message));
+});
 
-function verifyOTP() {
-  const code = document.getElementById("otp-code").value;
-  confirmationResult.confirm(code).then(result => {
-    const user = result.user;
-    currentUser = user.phoneNumber;
-    isAdmin = adminEmails.includes(user.email || "");
+document.getElementById('admin-login-btn').addEventListener('click', () => {
+  const password = document.getElementById('login-password').value;
 
-    document.getElementById("login-section").style.display = "none";
-    if (!userCart[currentUser]) userCart[currentUser] = [];
-
-    show("order-section");
-  }).catch(err => alert("Incorrect code"));
-}
-
-// ============ USER SECTION ==============
-
-async function processLinks() {
-  const linksText = document.getElementById("links").value.trim();
-  const links = linksText.split("\n").map(l => l.trim()).filter(Boolean);
-  if (!links.length) return alert("Paste at least one product link");
-
-  const cartContainer = document.getElementById("cart");
-  cartContainer.innerHTML = "";
-  userCart[currentUser] = [];
-
-  for (const link of links) {
-    const res = await fetch(https://webbuy-backend.onrender.com/api/fetch?url=${encodeURIComponent(link)});
-    const data = await res.json();
-    const item = {
-      link,
-      image: data.image || "https://via.placeholder.com/70",
-      priceUSD: data.price || 15,
-      priceMWK: (data.price || 15) * exchangeRate,
-      paid: false
-    };
-    userCart[currentUser].push(item);
-
-    const div = document.createElement("div");
-    div.className = "cart-item";
-    div.innerHTML = `
-      <img src="${item.image}" />
-      <div>
-        <p><strong>${item.link.includes("appjump") ? "Cart Link" : "Item"}</strong></p>
-        <p>$${item.priceUSD} → MWK ${item.priceMWK.toLocaleString()}</p>
-        <a href="${link}" target="_blank">View</a><br>
-        <label>
-          <input type="checkbox" onchange="markPaid('${currentUser}', ${userCart[currentUser].length - 1}, this)">
-          Mark as Paid
-        </label>
-      </div>
-    `;
-    cartContainer.appendChild(div);
-  }
-
-  const total = userCart[currentUser].reduce((sum, item) => sum + item.priceMWK, 0);
-  document.getElementById("total-mwk").textContent = total.toLocaleString();
-  document.getElementById("checkout").style.display = "block";
-}
-
-function markPaid(user, index, checkbox) {
-  const item = userCart[user][index];
-  item.paid = checkbox.checked;
-
-  if (item.paid) {
-    if (!paidUsers[user]) paidUsers[user] = [];
-    if (!paidUsers[user].includes(item)) paidUsers[user].push(item);
-
-    if (!allPaidItems[user]) allPaidItems[user] = [];
-    if (!allPaidItems[user].includes(item)) allPaidItems[user].push(item);
+  if (password === adminKey) {
+    document.getElementById('auth-section').style.display = 'none';
+    document.getElementById('admin-dashboard').style.display = 'block';
+    fetchAdminOrders();
+    fetchExchangeRate();
   } else {
-    paidUsers[user] = paidUsers[user]?.filter(i => i !== item);
-    allPaidItems[user] = allPaidItems[user]?.filter(i => i !== item);
+    alert('Invalid admin key.');
   }
+});
 
-  updateAdminViews();
-}
+document.getElementById('logout-btn').addEventListener('click', () => {
+  signOut(auth).then(() => {
+    location.reload();
+  });
+});
 
-function checkout() {
-  document.getElementById("payment-info").style.display = "block";
-  const log = document.getElementById("order-history");
-  const li = document.createElement("li");
-  li.innerHTML = `
-    <strong>${currentUser}</strong><br>
-    Items: ${paidUsers[currentUser]?.length || 0}<br>
-    Total Paid: MWK ${
-      (paidUsers[currentUser]?.reduce((sum, i) => sum + i.priceMWK, 0) || 0).toLocaleString()
-    }<br>Status: ${userTracking[currentUser] || 'Not Updated'}
-  `;
-  log.appendChild(li);
+document.getElementById('admin-logout-btn').addEventListener('click', () => {
+  location.reload();
+});
 
-  if (!document.querySelector(#tracking-user option[value="${currentUser}"])) {
-    const opt = document.createElement("option");
-    opt.value = currentUser;
-    opt.textContent = currentUser;
-    document.getElementById("tracking-user").appendChild(opt);
+document.getElementById('show-login').addEventListener('click', () => {
+  document.getElementById('signup-form').style.display = 'none';
+  document.getElementById('login-form').style.display = 'block';
+});
+
+document.getElementById('show-signup').addEventListener('click', () => {
+  document.getElementById('login-form').style.display = 'none';
+  document.getElementById('signup-form').style.display = 'block';
+});
+
+document.getElementById('process-links-btn').addEventListener('click', async () => {
+  const links = document.getElementById('single-links').value.trim().split('\n');
+  const cartLink = document.getElementById('cart-link').value.trim();
+
+  if (links.length === 0 && cartLink === '') return alert('Please provide at least one link.');
+
+  const response = await fetch(`${backendURL}/process-links`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ links, cartLink })
+  });
+
+  const result = await response.json();
+
+  if (result.success) {
+    displayCart(result.items, result.total);
+  } else {
+    alert('Error processing links.');
   }
-}
+});
 
-// ============ ADMIN SECTION ==============
+document.getElementById('checkout-btn').addEventListener('click', async () => {
+  const cartLink = document.getElementById('cart-link').value.trim();
 
-function adminUpdateRate() {
-  if (!isAdmin) return alert("Only admin can change the rate");
-  const newRate = parseFloat(document.getElementById("admin-rate").value);
-  if (isNaN(newRate) || newRate <= 0) return alert("Enter a valid rate");
-  exchangeRate = newRate;
-  alert(Exchange rate updated to ${exchangeRate});
-}
+  const response = await fetch(`${backendURL}/checkout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: auth.currentUser.email, cartLink })
+  });
 
-function updateAdminViews() {
-  const allPaidContainer = document.getElementById("all-paid-cart");
-  allPaidContainer.innerHTML = "";
+  const result = await response.json();
 
-  Object.keys(allPaidItems).forEach(user => {
-    allPaidItems[user].forEach(item => {
-      const li = document.createElement("li");
-      li.innerHTML = `
-        <strong>${user}</strong>: MWK ${item.priceMWK.toLocaleString()}<br>
-        <a href="${item.link}" target="_blank">View</a>
-      `;
-      allPaidContainer.appendChild(li);
-    });
+  if (result.success) {
+    alert('Order placed successfully.');
+    fetchOrders();
+  } else {
+    alert('Error placing order.');
+  }
+});
+
+document.getElementById('update-rate-btn').addEventListener('click', async () => {
+  const newRate = document.getElementById('new-rate').value;
+
+  const response = await fetch(`${backendURL}/update-rate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newRate })
+  });
+
+  const result = await response.json();
+
+  if (result.success) {
+    alert('Rate updated successfully.');
+    fetchExchangeRate();
+  } else {
+    alert('Error updating rate.');
+  }
+});
+
+async function fetchOrders() {
+  const response = await fetch(`${backendURL}/user-orders?email=${auth.currentUser.email}`);
+  const result = await response.json();
+
+  const historyDiv = document.getElementById('order-history');
+  historyDiv.innerHTML = '';
+
+  result.orders.forEach(order => {
+    const p = document.createElement('p');
+    p.textContent = `Order: ${order.link} - Total: MWK ${order.total}`;
+    historyDiv.appendChild(p);
   });
 }
 
-function updateTracking() {
-  const user = document.getElementById("tracking-user").value;
-  const status = document.getElementById("tracking-status").value;
-  if (!user) return alert("Choose a user");
+async function fetchAdminOrders() {
+  const response = await fetch(`${backendURL}/admin-orders`);
+  const result = await response.json();
 
-  userTracking[user] = status;
-  alert(${user}'s tracking updated to ${status});
+  const adminOrdersDiv = document.getElementById('admin-orders');
+  adminOrdersDiv.innerHTML = '';
+
+  result.orders.forEach(order => {
+    const p = document.createElement('p');
+    p.textContent = `User: ${order.email} | Order: ${order.link} | Total: MWK ${order.total}`;
+    adminOrdersDiv.appendChild(p);
+  });
 }
+
+async function fetchExchangeRate() {
+  const response = await fetch(`${backendURL}/rate`);
+  const result = await response.json();
+  document.getElementById('rate-display').textContent = result.rate;
+}
+
+function displayCart(items, total) {
+  const cartDiv = document.getElementById('cart-display');
+  cartDiv.innerHTML = '';
+
+  items.forEach(item => {
+    const p = document.createElement('p');
+    p.textContent = `Item: ${item.name} | Price: MWK ${item.price}`;
+    cartDiv.appendChild(p);
+  });
+
+  document.getElementById('total-amount').textContent = total;
+  document.getElementById('checkout-section').style.display = 'block';
+  document.getElementById('payment-section').style.display = 'block';
+}
+
+fetchExchangeRate();
